@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import os
+import h5py
 
 def parse_corr_file(fileBase, i, j, NT):
     values=[]
@@ -43,3 +44,52 @@ def log_effective_mass(corr):
             raise
     
     return res
+
+
+def foldCorr(c,NT):
+    res=[c[0]]
+    for t in range(1,int(NT/2)-1):
+        res.append((c[t]+c[NT-t])/2.)
+    res.append(c[int(NT/2)])
+    
+    return res
+
+def mesonDatasetToNumpy(dataset):
+    data = dataset['corr']
+    arr = []
+    for elem in data:
+        arr.append(complex(elem[0],elem[1]))
+    return np.array(arr)
+
+
+def get_nc_start_fin(dir):
+    files=[f for f in os.listdir(dir) if os.path.isfile(os.path.join(dir,f))]
+    files=[f for f in files if f.split('.')[1]=='t0']
+    ncStart=int(files[0].split('.')[2])
+    ncFinish=ncStart
+    for f in files:
+        cfg = int(f.split('.')[2])
+        if cfg < ncStart:
+            ncStart=int(cfg)
+        if cfg > ncFinish:
+            ncFinish=int(cfg)
+
+    return ncStart, ncFinish
+
+
+
+def get_all_pion_source_corrs(pionDir, sourceTimes, ncstart, ncfinish, step):
+    pionCorrs={}
+    for tsource in sourceTimes:
+
+        corrs=[]
+        for cfg in range(ncstart, ncfinish, step):
+            fileName=os.path.join(pionDir,'wall_ll.t{}.{}.h5'.format(tsource,cfg))
+            file = h5py.File(fileName,'r')
+            meson0=file['meson']['meson_0']
+            corr = mesonDatasetToNumpy(meson0)
+            corr = np.roll(corr, -tsource)
+            corrs.append(corr)
+
+        pionCorrs[tsource]=np.asarray(corrs)
+    return pionCorrs
